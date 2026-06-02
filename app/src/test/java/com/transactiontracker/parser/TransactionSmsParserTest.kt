@@ -15,7 +15,7 @@ class TransactionSmsParserTest {
             body = """
                 Sent Rs.20.00
                 From HDFC Bank A/C *9305
-                To Gajulapalli Jagan Mohan Rr
+                To Gajulapalli Jagan Mohan R
                 On 29/05/26
                 Ref 123xxxxxx138
                 Not You?
