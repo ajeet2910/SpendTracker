@@ -137,7 +137,7 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text("Filter Transactions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Txn History Filters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         DropdownField(
