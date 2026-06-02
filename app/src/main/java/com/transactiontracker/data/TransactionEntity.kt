@@ -26,5 +26,6 @@ data class TransactionEntity(
     val occurredAt: Long,
     val receivedAt: Long,
     val messageHash: String,
+    val ignoredInTotals: Boolean = false,
     val rawMessage: String? = null
 )

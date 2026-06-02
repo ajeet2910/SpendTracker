@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -56,11 +58,15 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { expanded = !expanded }
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                         Text(
                             transaction.merchant ?: transaction.bankName,
                             fontWeight = FontWeight.SemiBold,
@@ -68,12 +74,15 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                         )
                         Text(
                             money(transaction.amount),
-                            color = if (transaction.direction == "credit") {
+                            color = if (transaction.ignoredInTotals) {
+                                MaterialTheme.colorScheme.outline
+                            } else if (transaction.direction == "credit") {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = if (transaction.ignoredInTotals) TextDecoration.LineThrough else null
                         )
                         Icon(
                             imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -89,10 +98,18 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                            Text("Raw SMS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                             Text(
                                 viewModel.rawMessageFor(transaction) ?: "Raw SMS was not saved for this transaction.",
                                 style = MaterialTheme.typography.bodyMedium
+                            )
+                            FilterChip(
+                                selected = transaction.ignoredInTotals,
+                                onClick = {
+                                    viewModel.setIgnoredInTotals(transaction.id, !transaction.ignoredInTotals)
+                                },
+                                label = {
+                                    Text(if (transaction.ignoredInTotals) "Ignored" else "Ignore Txn")
+                                }
                             )
                         }
                     }

@@ -24,6 +24,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.transactiontracker.data.TransactionEntity
@@ -52,6 +54,11 @@ private enum class TransactionSort(val label: String) {
     DebitFirst("Debit First")
 }
 
+private data class MerchantOption(
+    val label: String,
+    val count: Int
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel()) {
@@ -60,6 +67,8 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
     var selectedMonth by remember { mutableStateOf<Int?>(null) }
     var selectedCard by remember { mutableStateOf<String?>(null) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var selectedMerchant by remember { mutableStateOf<String?>(null) }
+    var visibleMerchantCount by remember { mutableStateOf(10) }
     var selectedDirection by remember { mutableStateOf<String?>(null) }
     var sort by remember { mutableStateOf(TransactionSort.TimestampNewest) }
 
@@ -78,6 +87,18 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
         .map { it.paymentCategory }
         .distinct()
         .sorted()
+    val merchantSourceTransactions = transactions
+        .asSequence()
+        .filter { selectedYear == null || it.occurredAt.yearPart() == selectedYear }
+        .filter { selectedMonth == null || it.occurredAt.monthPart() == selectedMonth }
+        .toList()
+
+    val merchants = merchantSourceTransactions
+        .mapNotNull { it.merchantFilterLabel() }
+        .groupingBy { it }
+        .eachCount()
+        .map { MerchantOption(label = it.key, count = it.value) }
+        .sortedWith(compareByDescending<MerchantOption> { it.count }.thenBy { it.label })
 
     val filtered = transactions
         .asSequence()
@@ -85,6 +106,7 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
         .filter { selectedMonth == null || it.occurredAt.monthPart() == selectedMonth }
         .filter { selectedCard == null || it.lastDigits == selectedCard }
         .filter { selectedCategory == null || it.paymentCategory == selectedCategory }
+        .filter { selectedMerchant == null || it.merchantFilterLabel() == selectedMerchant }
         .filter { selectedDirection == null || it.direction == selectedDirection }
         .let { sequence ->
             when (sort) {
@@ -122,7 +144,11 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
                             label = "Year",
                             value = selectedYear?.toString() ?: "All",
                             options = listOf("All") + years.map { it.toString() },
-                            onSelect = { selectedYear = it.takeUnless { value -> value == "All" }?.toIntOrNull() },
+                            onSelect = {
+                                selectedYear = it.takeUnless { value -> value == "All" }?.toIntOrNull()
+                                selectedMerchant = null
+                                visibleMerchantCount = 10
+                            },
                             modifier = Modifier.weight(1f)
                         )
 
@@ -136,6 +162,8 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
                                 } else {
                                     (1..12).first { Month.of(it).name.take(3) == value }
                                 }
+                                selectedMerchant = null
+                                visibleMerchantCount = 10
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -158,6 +186,14 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
                             modifier = Modifier.weight(1f)
                         )
                     }
+
+                    MerchantDropdownField(
+                        value = selectedMerchant ?: "All",
+                        merchants = merchants,
+                        visibleCount = visibleMerchantCount,
+                        onSelect = { selectedMerchant = it },
+                        onLoadMore = { visibleMerchantCount += 10 }
+                    )
 
                     DropdownField(
                         label = "Type",
@@ -193,8 +229,72 @@ fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel(
         items(filtered, key = { it.id }) { transaction ->
             FilteredTransactionCard(
                 transaction = transaction,
-                rawMessage = viewModel.rawMessageFor(transaction)
+                rawMessage = viewModel.rawMessageFor(transaction),
+                onIgnoredChange = { ignored ->
+                    viewModel.setIgnoredInTotals(transaction.id, ignored)
+                }
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MerchantDropdownField(
+    value: String,
+    merchants: List<MerchantOption>,
+    visibleCount: Int,
+    onSelect: (String?) -> Unit,
+    onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val visibleMerchants = merchants.take(visibleCount)
+    val hasMore = merchants.size > visibleCount
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Merchant") },
+            trailingIcon = {
+                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+            },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("All") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                }
+            )
+            visibleMerchants.forEach { merchant ->
+                DropdownMenuItem(
+                    text = { Text("${merchant.label} (${merchant.count})") },
+                    onClick = {
+                        onSelect(merchant.label)
+                        expanded = false
+                    }
+                )
+            }
+            if (hasMore) {
+                DropdownMenuItem(
+                    text = { Text("More") },
+                    onClick = { onLoadMore() }
+                )
+            }
         }
     }
 }
@@ -247,7 +347,8 @@ private fun DropdownField(
 @Composable
 private fun FilteredTransactionCard(
     transaction: TransactionEntity,
-    rawMessage: String?
+    rawMessage: String?,
+    onIgnoredChange: (Boolean) -> Unit
 ) {
     var expanded by remember(transaction.id) { mutableStateOf(false) }
 
@@ -255,11 +356,15 @@ private fun FilteredTransactionCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
                     transaction.merchant ?: transaction.bankName,
                     fontWeight = FontWeight.SemiBold,
@@ -267,12 +372,15 @@ private fun FilteredTransactionCard(
                 )
                 Text(
                     money(transaction.amount),
-                    color = if (transaction.direction == "credit") {
+                    color = if (transaction.ignoredInTotals) {
+                        MaterialTheme.colorScheme.outline
+                    } else if (transaction.direction == "credit") {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = if (transaction.ignoredInTotals) TextDecoration.LineThrough else null
                 )
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -288,10 +396,16 @@ private fun FilteredTransactionCard(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                    Text("Raw SMS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     Text(
                         rawMessage ?: "Raw SMS was not saved for this transaction.",
                         style = MaterialTheme.typography.bodyMedium
+                    )
+                    FilterChip(
+                        selected = transaction.ignoredInTotals,
+                        onClick = { onIgnoredChange(!transaction.ignoredInTotals) },
+                        label = {
+                            Text(if (transaction.ignoredInTotals) "Ignored" else "Ignore Txn")
+                        }
                     )
                 }
             }
@@ -315,4 +429,11 @@ private fun TransactionEntity.cardFilterLabel(): String {
         .ifBlank { bankName }
 
     return "$compactBankName $lastDigits"
+}
+
+private fun TransactionEntity.merchantFilterLabel(): String? {
+    return merchant
+        ?.trim()
+        ?.replace(Regex("""\s+"""), " ")
+        ?.takeIf { it.isNotBlank() }
 }

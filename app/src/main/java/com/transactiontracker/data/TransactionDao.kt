@@ -26,6 +26,9 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(transaction: TransactionEntity): Long
 
+    @Query("UPDATE transactions SET ignoredInTotals = :ignored WHERE id = :transactionId")
+    suspend fun setIgnoredInTotals(transactionId: Long, ignored: Boolean)
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 }
