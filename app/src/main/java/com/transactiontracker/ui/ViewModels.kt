@@ -105,6 +105,15 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val lastThreeMonthsTransactions = selectedMonth
+        .flatMapLatest { month ->
+            val zone = ZoneId.systemDefault()
+            val start = month.minusMonths(3).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val end = month.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            database.transactionDao().observeTransactionsBetween(start, end)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun previousMonth() {
         selectedMonth.value = selectedMonth.value.minusMonths(1)
     }
@@ -125,6 +134,12 @@ class TransactionsViewModel(application: Application) : AndroidViewModel(applica
     fun rawMessageFor(transaction: TransactionEntity): String? {
         return rawSmsCrypto.decrypt(transaction.rawMessage)
     }
+
+    fun setIgnoredInTotals(transactionId: Long, ignored: Boolean) {
+        viewModelScope.launch {
+            database.transactionDao().setIgnoredInTotals(transactionId, ignored)
+        }
+    }
 }
 
 class FilterTransactionsViewModel(application: Application) : AndroidViewModel(application) {
@@ -138,12 +153,18 @@ class FilterTransactionsViewModel(application: Application) : AndroidViewModel(a
     fun rawMessageFor(transaction: TransactionEntity): String? {
         return rawSmsCrypto.decrypt(transaction.rawMessage)
     }
+
+    fun setIgnoredInTotals(transactionId: Long, ignored: Boolean) {
+        viewModelScope.launch {
+            database.transactionDao().setIgnoredInTotals(transactionId, ignored)
+        }
+    }
 }
 
 fun List<TransactionEntity>.debitTotal(): Double {
-    return filter { it.direction == "debit" }.sumOf { it.amount }
+    return filter { it.direction == "debit" && !it.ignoredInTotals }.sumOf { it.amount }
 }
 
 fun List<TransactionEntity>.creditTotal(): Double {
-    return filter { it.direction == "credit" }.sumOf { it.amount }
+    return filter { it.direction == "credit" && !it.ignoredInTotals }.sumOf { it.amount }
 }

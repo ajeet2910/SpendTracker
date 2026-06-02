@@ -1,6 +1,8 @@
 package com.transactiontracker.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,16 +29,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.transactiontracker.data.TransactionEntity
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
     val transactions by viewModel.transactions.collectAsState()
+    val lastThreeMonthsTransactions by viewModel.lastThreeMonthsTransactions.collectAsState()
     val month by viewModel.month.collectAsState()
     val debits = transactions.debitTotal()
     val credits = transactions.creditTotal()
     val byCategory = transactions
-        .filter { it.direction == "debit" }
+        .filter { it.direction == "debit" && !it.ignoredInTotals }
         .groupBy { it.paymentCategory }
         .mapValues { entry -> entry.value.sumOf { it.amount } }
         .toList()
@@ -105,6 +112,21 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                 }
             }
         }
+
+        item {
+            Card(shape = RoundedCornerShape(8.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Last 3 Months", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    ThreeMonthSpendChart(
+                        selectedMonth = month,
+                        transactions = lastThreeMonthsTransactions
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -133,5 +155,62 @@ private fun SpendBar(label: String, amount: Double, max: Double) {
                 .height(8.dp)
                 .clip(RoundedCornerShape(4.dp))
         )
+    }
+}
+
+@Composable
+private fun ThreeMonthSpendChart(
+    selectedMonth: YearMonth,
+    transactions: List<TransactionEntity>
+) {
+    val months = listOf(
+        selectedMonth.minusMonths(3),
+        selectedMonth.minusMonths(2),
+        selectedMonth.minusMonths(1)
+    )
+    val totals = months.map { chartMonth ->
+        chartMonth to transactions
+            .filter {
+                it.direction == "debit" &&
+                    !it.ignoredInTotals &&
+                    YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(ZoneId.systemDefault())) == chartMonth
+            }
+            .sumOf { it.amount }
+    }
+    val max = totals.maxOfOrNull { it.second } ?: 0.0
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        totals.forEach { (chartMonth, total) ->
+            val barHeight = if (max <= 0.0) {
+                8.dp
+            } else {
+                (112 * (total / max).coerceIn(0.05, 1.0)).toFloat().dp
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                Text(money(total), style = MaterialTheme.typography.labelSmall)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+                Text(
+                    chartMonth.format(DateTimeFormatter.ofPattern("MMM")),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -15,6 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -41,8 +44,13 @@ private val routes = listOf(
     AppRoute("accounts", "Banks & Cards", { Icon(Icons.Outlined.AccountBalance, contentDescription = null) }),
     AppRoute("sync", "Sync SMS", { Icon(Icons.Outlined.Sync, contentDescription = null) }),
     AppRoute("reset_sync", "Reset Sync", { Icon(Icons.Outlined.RestartAlt, contentDescription = null) }),
-    AppRoute("filters", "Filter", { Icon(Icons.Outlined.FilterList, contentDescription = null) }),
+    AppRoute("filters", "Txn History", { Icon(Icons.Outlined.FilterList, contentDescription = null) }),
     AppRoute("transactions", "Transactions", { Icon(Icons.Outlined.ReceiptLong, contentDescription = null) })
+)
+
+private val bottomRoutes = listOf(
+    AppRoute("dashboard", "Home", { Icon(Icons.Outlined.Home, contentDescription = null) }),
+    AppRoute("filters", "Txn History", { Icon(Icons.Outlined.FilterList, contentDescription = null) })
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,6 +94,26 @@ fun TrackerApp() {
                         }
                     }
                 )
+            },
+            bottomBar = {
+                NavigationBar {
+                    bottomRoutes.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    launchSingleTop = true
+                                    popUpTo("dashboard") {
+                                        saveState = true
+                                    }
+                                    restoreState = true
+                                }
+                            },
+                            icon = item.icon,
+                            label = { Text(item.label) }
+                        )
+                    }
+                }
             }
         ) { padding ->
             NavHost(
