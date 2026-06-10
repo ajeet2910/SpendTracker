@@ -24,13 +24,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 
 private data class AppRoute(
@@ -55,12 +61,20 @@ private val bottomRoutes = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TrackerApp() {
+fun TrackerApp(
+    dashboardViewModel: DashboardViewModel = viewModel()
+) {
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route ?: "dashboard"
-    val currentLabel = routes.firstOrNull { it.route == currentRoute }?.label ?: "Transaction Tracker"
+    
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    
+    // Determine the current label based on the destination's route pattern
+    val currentLabel = routes.firstOrNull { 
+        currentDestination?.hierarchy?.any { h -> h.route?.substringBefore("?") == it.route } == true 
+    }?.label ?: "Transaction Tracker"
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -68,15 +82,22 @@ fun TrackerApp() {
             ModalDrawerSheet {
                 Text("Transaction Tracker", modifier = Modifier.padding(24.dp))
                 routes.forEach { item ->
+                    val isSelected = currentDestination?.hierarchy?.any { it.route?.substringBefore("?") == item.route } == true
                     NavigationDrawerItem(
                         icon = item.icon,
                         label = { Text(item.label) },
-                        selected = currentRoute == item.route,
+                        selected = isSelected,
                         onClick = {
                             scope.launch { drawerState.close() }
+                            if (item.route == "dashboard") {
+                                dashboardViewModel.resetToCurrentMonth()
+                            }
                             navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
                                 launchSingleTop = true
-                                popUpTo("dashboard")
+                                restoreState = true
                             }
                         }
                     )
@@ -98,14 +119,18 @@ fun TrackerApp() {
             bottomBar = {
                 NavigationBar {
                     bottomRoutes.forEach { item ->
+                        val isSelected = currentDestination?.hierarchy?.any { it.route?.substringBefore("?") == item.route } == true
                         NavigationBarItem(
-                            selected = currentRoute == item.route,
+                            selected = isSelected,
                             onClick = {
+                                if (item.route == "dashboard") {
+                                    dashboardViewModel.resetToCurrentMonth()
+                                }
                                 navController.navigate(item.route) {
-                                    launchSingleTop = true
-                                    popUpTo("dashboard") {
+                                    popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
                                     }
+                                    launchSingleTop = true
                                     restoreState = true
                                 }
                             },
@@ -121,11 +146,52 @@ fun TrackerApp() {
                 startDestination = "dashboard",
                 modifier = Modifier.padding(padding)
             ) {
-                composable("dashboard") { DashboardScreen() }
+                composable("dashboard") {
+                    DashboardScreen(
+                        viewModel = dashboardViewModel,
+                        onNavigateToFilters = { year, month, category, direction ->
+                            val route = buildString {
+                                append("filters")
+                                val params = mutableListOf<String>()
+                                if (year != null) params.add("year=$year")
+                                if (month != null) params.add("month=$month")
+                                if (category != null) params.add("category=$category")
+                                if (direction != null) params.add("direction=$direction")
+                                if (params.isNotEmpty()) {
+                                    append("?")
+                                    append(params.joinToString("&"))
+                                }
+                            }
+                            navController.navigate(route) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                }
                 composable("accounts") { AccountsScreen() }
                 composable("sync") { SyncSmsScreen() }
                 composable("reset_sync") { ResetSyncScreen() }
-                composable("filters") { FilterTransactionsScreen() }
+                composable(
+                    route = "filters?year={year}&month={month}&category={category}&direction={direction}",
+                    arguments = listOf(
+                        navArgument("year") { type = NavType.StringType; nullable = true },
+                        navArgument("month") { type = NavType.StringType; nullable = true },
+                        navArgument("category") { type = NavType.StringType; nullable = true },
+                        navArgument("direction") { type = NavType.StringType; nullable = true }
+                    )
+                ) { backStackEntry ->
+                    val year = backStackEntry.arguments?.getString("year")?.toIntOrNull()
+                    val month = backStackEntry.arguments?.getString("month")?.toIntOrNull()
+                    val category = backStackEntry.arguments?.getString("category")
+                    val direction = backStackEntry.arguments?.getString("direction")
+                    
+                    FilterTransactionsScreen(
+                        initialYear = year,
+                        initialMonth = month,
+                        initialCategory = category,
+                        initialDirection = direction
+                    )
+                }
                 composable("transactions") { TransactionsScreen() }
             }
         }

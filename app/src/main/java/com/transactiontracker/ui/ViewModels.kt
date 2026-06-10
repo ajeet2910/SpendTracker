@@ -121,6 +121,10 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun nextMonth() {
         selectedMonth.value = selectedMonth.value.plusMonths(1)
     }
+
+    fun resetToCurrentMonth() {
+        selectedMonth.value = YearMonth.now()
+    }
 }
 
 class TransactionsViewModel(application: Application) : AndroidViewModel(application) {

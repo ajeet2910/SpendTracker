@@ -1,6 +1,7 @@
 package com.transactiontracker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +37,10 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
+fun DashboardScreen(
+    viewModel: DashboardViewModel = viewModel(),
+    onNavigateToFilters: (year: Int?, month: Int?, category: String?, direction: String?) -> Unit = { _, _, _, _ -> }
+) {
     val transactions by viewModel.transactions.collectAsState()
     val lastThreeMonthsTransactions by viewModel.lastThreeMonthsTransactions.collectAsState()
     val month by viewModel.month.collectAsState()
@@ -76,7 +80,12 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
         }
 
         item {
-            Card(shape = RoundedCornerShape(8.dp)) {
+            Card(
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.clickable {
+                    onNavigateToFilters(month.year, month.monthValue, null, "debit")
+                }
+            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -90,8 +99,24 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                SummaryTile("Credits", money(credits), Modifier.weight(1f))
-                SummaryTile("Net Outflow", money((debits - credits).coerceAtLeast(0.0)), Modifier.weight(1f))
+                SummaryTile(
+                    label = "Credits",
+                    value = money(credits),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            onNavigateToFilters(month.year, month.monthValue, null, "credit")
+                        }
+                )
+                SummaryTile(
+                    label = "Net Outflow",
+                    value = money((debits - credits).coerceAtLeast(0.0)),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable {
+                            onNavigateToFilters(month.year, month.monthValue, null, null)
+                        }
+                )
             }
         }
 
@@ -106,7 +131,14 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                         Text("No spending found for this month.")
                     } else {
                         byCategory.forEach { (category, amount) ->
-                            SpendBar(label = category, amount = amount, max = byCategory.first().second)
+                            SpendBar(
+                                label = category,
+                                amount = amount,
+                                max = byCategory.first().second,
+                                modifier = Modifier.clickable {
+                                    onNavigateToFilters(month.year, month.monthValue, category, "debit")
+                                }
+                            )
                         }
                     }
                 }
@@ -122,7 +154,10 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                     Text("Last 3 Months", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     ThreeMonthSpendChart(
                         selectedMonth = month,
-                        transactions = lastThreeMonthsTransactions
+                        transactions = lastThreeMonthsTransactions,
+                        onBarClick = { clickedMonth ->
+                            onNavigateToFilters(clickedMonth.year, clickedMonth.monthValue, null, "debit")
+                        }
                     )
                 }
             }
@@ -141,9 +176,12 @@ private fun SummaryTile(label: String, value: String, modifier: Modifier = Modif
 }
 
 @Composable
-private fun SpendBar(label: String, amount: Double, max: Double) {
+private fun SpendBar(label: String, amount: Double, max: Double, modifier: Modifier = Modifier) {
     val progress = if (max <= 0.0) 0f else (amount / max).toFloat().coerceIn(0f, 1f)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+    ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, fontWeight = FontWeight.Medium)
             Text(money(amount))
@@ -161,7 +199,8 @@ private fun SpendBar(label: String, amount: Double, max: Double) {
 @Composable
 private fun ThreeMonthSpendChart(
     selectedMonth: YearMonth,
-    transactions: List<TransactionEntity>
+    transactions: List<TransactionEntity>,
+    onBarClick: (YearMonth) -> Unit
 ) {
     val months = listOf(
         selectedMonth.minusMonths(3),
@@ -193,7 +232,9 @@ private fun ThreeMonthSpendChart(
                 (112 * (total / max).coerceIn(0.05, 1.0)).toFloat().dp
             }
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onBarClick(chartMonth) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom
             ) {

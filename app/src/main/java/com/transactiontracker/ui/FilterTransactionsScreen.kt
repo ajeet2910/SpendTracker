@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.transactiontracker.data.TransactionEntity
 import java.time.Instant
+import java.time.LocalDate
 import java.time.Month
 import java.time.ZoneId
 
@@ -61,16 +63,32 @@ private data class MerchantOption(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterTransactionsScreen(viewModel: FilterTransactionsViewModel = viewModel()) {
+fun FilterTransactionsScreen(
+    viewModel: FilterTransactionsViewModel = viewModel(),
+    initialYear: Int? = null,
+    initialMonth: Int? = null,
+    initialCategory: String? = null,
+    initialDirection: String? = null
+) {
     val transactions by viewModel.transactions.collectAsState()
-    var selectedYear by remember { mutableStateOf<Int?>(null) }
-    var selectedMonth by remember { mutableStateOf<Int?>(null) }
+    val now = remember { LocalDate.now() }
+    
+    var selectedYear by remember { mutableStateOf<Int?>(initialYear ?: now.year) }
+    var selectedMonth by remember { mutableStateOf<Int?>(initialMonth ?: now.monthValue) }
     var selectedCard by remember { mutableStateOf<String?>(null) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var selectedCategory by remember { mutableStateOf<String?>(initialCategory) }
     var selectedMerchant by remember { mutableStateOf<String?>(null) }
     var visibleMerchantCount by remember { mutableStateOf(10) }
-    var selectedDirection by remember { mutableStateOf<String?>(null) }
+    var selectedDirection by remember { mutableStateOf<String?>(initialDirection) }
     var sort by remember { mutableStateOf(TransactionSort.TimestampNewest) }
+
+    // Update state if initial values change (e.g. from nav arguments)
+    LaunchedEffect(initialYear, initialMonth, initialCategory, initialDirection) {
+        if (initialYear != null) selectedYear = initialYear
+        if (initialMonth != null) selectedMonth = initialMonth
+        if (initialCategory != null) selectedCategory = initialCategory
+        if (initialDirection != null) selectedDirection = initialDirection
+    }
 
     val years = transactions
         .map { it.occurredAt.yearPart() }
