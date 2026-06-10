@@ -29,10 +29,10 @@ class SmsReceiver : BroadcastReceiver() {
                 val accounts = database.trackedAccountDao().getEnabledAccounts()
                 val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
 
-                messages.forEach { sms ->
-                    val sender = sms.originatingAddress.orEmpty()
-                    val body = sms.messageBody.orEmpty()
-                    val receivedAt = sms.timestampMillis
+                messages.groupBy { it.originatingAddress }.forEach { (senderAddress, smsParts) ->
+                    val sender = senderAddress.orEmpty()
+                    val body = smsParts.joinToString("") { it.messageBody.orEmpty() }
+                    val receivedAt = smsParts.firstOrNull()?.timestampMillis ?: System.currentTimeMillis()
 
                     val transaction = accounts.firstNotNullOfOrNull { account ->
                         parser.parse(sender, body, account)?.let { parsed ->
